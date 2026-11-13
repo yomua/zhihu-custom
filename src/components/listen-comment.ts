@@ -149,7 +149,7 @@ const formatComments = async (nodeComments?: HTMLElement, commentBoxClass = '.cs
 
     if (!item.getAttribute(ATTR_ID) || item.classList.contains(CTZ_HIDDEN_ITEM_CLASS)) continue;
 
-    const itemUserBox = item.querySelector(`${commentBoxClass} .css-14nvvry .css-swj9d4`) as HTMLElement;
+    const itemUserBox = item.querySelector(`${commentBoxClass} .css-1bklfe6 .css-swj9d4`) as HTMLElement;
     if (!itemUserBox) continue;
     /** 获取当前评论的用户信息，可能有两条的情况（回复评论） */
     const itemCommentUsers = itemUserBox.querySelectorAll('.css-1tww9qq');

@@ -31,6 +31,8 @@ export const myListenAnswer = {
     const questionAnswerContent = dom('.QuestionAnswer-content');
     questionAnswerContent && doContentItem('QUESTION', questionAnswerContent.querySelector('.ContentItem') as HTMLElement);
     processingData(domA(`.AnswersNavWrapper .List-item:not(.${CLASS_LISTENED})`));
+    processingData(domA('.ListShortcut .Card.AnswerCard'));
+    processingData(domA('.ListShortcut .Card.MoreAnswers .List-item'));
   },
   reset: function () {
     if (this.retryTimer) {

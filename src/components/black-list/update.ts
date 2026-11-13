@@ -25,7 +25,7 @@ export const updateItemAfterBlock = async (
     [listKey]: [nextUser, ...prevList.filter((item) => item.id !== userInfo.id)],
     [otherListKey]: (config[otherListKey] || []).filter((item) => item.id !== userInfo.id),
   });
-
+  
   await initHTMLBlockedUsers(document.body);
   if (options.openTagChoose !== false && openTagChooseAfterBlockedUser) {
     const nodeUserItem = dom(`#${listType === BLOCKED_USER_LIST_TYPE.zhihu ? ID_BLOCK_LIST : ID_LOCAL_BLOCK_LIST} .ctz-black-id-${userInfo.id}`);

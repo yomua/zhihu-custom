@@ -93,7 +93,7 @@ const HIDDEN_ITEM_COMMON: IHiddenItem = {
       {
         label: '顶部菜单栏 - AI Works',
         value: 'hiddenHeaderSquare',
-        css: '.AppHeader a[href="https://www.zhihu.com/project/square"]{display:none}',
+        css: '.AppHeader a[href="https://www.zhihu.com/project-square"]{display:none}',
       },
       {
         label: '顶部菜单栏 - 故事',
@@ -134,6 +134,13 @@ const HIDDEN_ITEM_COMMON: IHiddenItem = {
         label: '回答和文章中的知学堂推广商品模块',
         value: 'hiddenZhihuZhiShop',
         css: '.RichText-EduCardContainer{display:none;}',
+      },
+    ],
+    [
+      {
+        label: '左侧边栏',
+        value: 'hiddenLeftSidebar',
+        css: 'aside{display: none!important;}',
       },
     ],
   ],
@@ -296,6 +303,11 @@ const HIDDEN_ITEM_LIST: IHiddenItem = {
         value: 'hiddenHomePayAsk',
         css: '.Topstory .css-1dyj6jm{display:none;}',
       },
+      {
+        label: '右侧边栏',
+        value: 'hiddenRightSidebar',
+        css: "div[data-za-detail-view-path-module='RightSideBar']{display: none!important;}",
+      },
     ],
     [
       {
@@ -426,7 +438,7 @@ const HIDDEN_ITEM_ANSWER: IHiddenItem = {
       {
         label: '问题话题',
         value: 'hiddenQuestionTag',
-        css: '.QuestionHeader-tags,.QuestionHeader .css-wmwsyx{display: none!important;}',
+        css: '.QuestionHeader-tags,.QuestionHeader-content .css-wmwsyx{display: none!important;}',
       },
       {
         label: '问题分享按钮',
@@ -436,37 +448,37 @@ const HIDDEN_ITEM_ANSWER: IHiddenItem = {
       {
         label: '"好问题"按钮',
         value: 'hiddenQuestionGoodQuestion',
-        css: '.QuestionPage .QuestionHeader .GoodQuestionAction{display: none}',
+        css: '.QuestionPage .QuestionHeader-content .GoodQuestionAction{display: none}',
       },
       {
         label: '问题添加评论按钮',
         value: 'hiddenQuestionComment',
-        css: '.QuestionPage .QuestionHeader .QuestionHeader-Comment{display: none}',
+        css: '.QuestionPage .QuestionHeader-content .QuestionHeader-Comment{display: none}',
       },
       {
         label: '问题"..."按钮',
         value: 'hiddenQuestionMore',
-        css: '.QuestionPage .QuestionHeader [aria-label="更多"]{display: none;}',
+        css: '.QuestionPage .QuestionHeader-content [aria-label="更多"]{display: none;}',
       },
       {
         label: '问题专题收录标签',
         value: 'hiddenQuestionSpecial',
-        css: '.QuestionHeader .LabelContainer-wrapper{display: none;}',
+        css: '.QuestionHeader-content .LabelContainer-wrapper{display: none;}',
       },
       {
         label: '问题关注按钮',
         value: 'hiddenQuestionFollowing',
-        css: '.QuestionHeader .FollowButton{display: none;}',
+        css: '.QuestionHeader-content .FollowButton{display: none;}',
       },
       {
         label: '问题写回答按钮',
         value: 'hiddenQuestionAnswer',
-        css: '.QuestionHeader .FollowButton ~ button{display: none;}',
+        css: '.QuestionHeader-content .FollowButton ~ button{display: none;}',
       },
       {
         label: '问题邀请回答按钮',
         value: 'hiddenQuestionInvite',
-        css: '.QuestionHeader .QuestionHeaderActions>button:first-child{display: none;}',
+        css: '.QuestionHeader-content .QuestionHeaderActions>button:first-child{display: none;}',
       },
       {
         label: '问题标题卡片广告和榜单',

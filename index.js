@@ -512,26 +512,99 @@
         configBlackList[name] = config[name];
       }
     });
-    const dateNumber = +/* @__PURE__ */ new Date();
-    const link = domC("a", {
-      href: "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(JSON.stringify(configBlackList)),
-      download: `黑名单配置-${formatTime(dateNumber, "YYYYMMDD-HHmmss")}-${dateNumber}.txt`
+    const doExport = () => {
+      const dateNumber = +/* @__PURE__ */ new Date();
+      const link = domC("a", {
+        href: "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(JSON.stringify(configBlackList)),
+        download: `黑名单配置-${formatTime(dateNumber, "YYYYMMDD-HHmmss")}-${dateNumber}.txt`
+      });
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+    const fileInput = domC("input", {
+      type: "file",
+      accept: ".txt",
+      style: "display: none;"
     });
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(fileInput);
+    fileInput.onchange = (e) => {
+      const file = (e.target.files || [])[0];
+      if (!file) {
+        document.body.removeChild(fileInput);
+        doExport();
+        return;
+      }
+      const reader = new FileReader();
+      reader.readAsText(file);
+      reader.onload = (oFREvent) => {
+        document.body.removeChild(fileInput);
+        let fileContent = oFREvent.target ? oFREvent.target.result : "";
+        if (typeof fileContent === "string") {
+          fileContent = fileContent.replace(/^\ufeff/, "").trim();
+          try {
+            const fileConfig = JSON.parse(fileContent);
+            configBlackList.blockedUsers = getAllBlockedUsers({
+              blockedUsers: mergeBlockedUsers([
+                ...config.blockedUsers || [],
+                ...fileConfig.blockedUsers || []
+              ]),
+              localBlockedUsers: mergeBlockedUsers([
+                ...config.localBlockedUsers || [],
+                ...fileConfig.localBlockedUsers || []
+              ])
+            });
+            configBlackList.localBlockedUsers = [];
+            if (fileConfig.blockedUsersTags) {
+              configBlackList.blockedUsersTags = [
+                .../* @__PURE__ */ new Set([
+                  ...configBlackList.blockedUsersTags || [],
+                  ...fileConfig.blockedUsersTags
+                ])
+              ];
+            }
+            message("已合并选择的文件内容");
+          } catch (err) {
+            message("选择的文件内容格式错误，将导出当前配置");
+          }
+        }
+        doExport();
+      };
+    };
+    fileInput.click();
   };
   var onImportBlack = async (oFREvent) => {
     let configBlackJson = oFREvent.target ? oFREvent.target.result : "";
     if (typeof configBlackJson !== "string") return;
-    const configBlack = JSON.parse(configBlackJson);
-    const { blockedUsers = [], localBlockedUsers = [], blockedUsersTags = [] } = configBlack;
+    configBlackJson = configBlackJson.replace(/^\ufeff/, "").trim();
+    let configBlack;
+    try {
+      configBlack = JSON.parse(configBlackJson);
+    } catch (e) {
+      message("黑名单配置导入失败：文件内容格式错误");
+      return;
+    }
+    const {
+      blockedUsers = [],
+      localBlockedUsers = [],
+      blockedUsersTags = []
+    } = configBlack;
     const prevConfig = await myStorage.getConfig();
-    const { blockedUsers: prevBlockUsers = [], localBlockedUsers: prevLocalBlockedUsers = [], blockedUsersTags: prevBlockedUsersTags = [] } = prevConfig;
+    const {
+      blockedUsers: prevBlockUsers = [],
+      localBlockedUsers: prevLocalBlockedUsers = [],
+      blockedUsersTags: prevBlockedUsersTags = []
+    } = prevConfig;
     const nTags = [.../* @__PURE__ */ new Set([...prevBlockedUsersTags, ...blockedUsersTags])];
-    const nBlackList = mergeBlockedUsers([...prevBlockUsers, ...blockedUsers]);
+    const nBlackList = mergeBlockedUsers([
+      ...prevBlockUsers,
+      ...blockedUsers
+    ]);
     const blockedUserIds = new Set(nBlackList.map((item) => item.id));
-    const nLocalBlackList = mergeBlockedUsers([...prevLocalBlockedUsers, ...localBlockedUsers]).filter((item) => !blockedUserIds.has(item.id));
+    const nLocalBlackList = mergeBlockedUsers([
+      ...prevLocalBlockedUsers,
+      ...localBlockedUsers
+    ]).filter((item) => !blockedUserIds.has(item.id));
     await myStorage.updateConfig({
       ...prevConfig,
       ...configBlack,
@@ -539,8 +612,22 @@
       localBlockedUsers: nLocalBlackList,
       blockedUsersTags: nTags
     });
-    message("导入完成，请等待知乎黑名单同步...");
-    onSyncBlackList(0);
+    message("导入完成，正在同步黑名单...");
+    onSyncBlackList(0, nBlackList, async (serverIds) => {
+      const pushUsers = blockedUsers.filter(
+        (u) => u.urlToken && !serverIds.has(u.id)
+      );
+      if (!pushUsers.length) return;
+      message(`正在将 ${pushUsers.length} 名用户加入知乎黑名单...`);
+      let successCount = 0;
+      for (const user of pushUsers) {
+        const result = await addBlockUser(user, { openTagChoose: false });
+        if (result === BLOCKED_USER_LIST_TYPE.zhihu) successCount++;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      initHTMLBlockedUsers(document.body);
+      if (successCount) message(`已将 ${successCount} 名用户加入知乎黑名单`);
+    });
   };
   var onSyncRemoveBlockedUsers = async () => {
     if (!confirm("您确定要取消所有知乎黑名单用户吗？")) return;
@@ -549,7 +636,10 @@
     if (!blockedUsers.length) return;
     const buttonSync = dom('button[name="syncBlackRemove"]');
     if (!buttonSync.querySelector("ctz-loading")) {
-      fnDomReplace(buttonSync, { innerHTML: '<i class="ctz-loading">↻</i>', disabled: true });
+      fnDomReplace(buttonSync, {
+        innerHTML: '<i class="ctz-loading">↻</i>',
+        disabled: true
+      });
     }
     const len = blockedUsers.length;
     let finishNumber = 0;
@@ -559,7 +649,10 @@
         removeBlockUser(info, false).then(async () => {
           finishNumber++;
           if (finishNumber === len) {
-            fnDomReplace(buttonSync, { innerHTML: "清空知乎黑名单", disabled: false });
+            fnDomReplace(buttonSync, {
+              innerHTML: "清空知乎黑名单",
+              disabled: false
+            });
             await myStorage.updateConfigItem("blockedUsers", []);
             initHTMLBlockedUsers(document.body);
           }
@@ -567,31 +660,43 @@
       }
     }
   };
-  function onSyncBlackList(offset = 0, l = []) {
+  function onSyncBlackList(offset = 0, l = [], onComplete, serverIds = /* @__PURE__ */ new Set()) {
     const nodeList = domById(ID_BLOCK_LIST);
     if (!l.length && nodeList) {
       nodeList.innerHTML = "知乎黑名单加载中...";
     }
     const buttonSync = dom('button[name="syncBlack"]');
     if (!buttonSync.querySelector("ctz-loading")) {
-      fnDomReplace(buttonSync, { innerHTML: '<i class="ctz-loading">↻</i>', disabled: true });
+      fnDomReplace(buttonSync, {
+        innerHTML: '<i class="ctz-loading">↻</i>',
+        disabled: true
+      });
     }
     const limit = 20;
     const headers = store.getFetchHeaders();
-    fetch(`https://www.zhihu.com/api/v3/settings/blocked_users?offset=${offset}&limit=${limit}`, {
-      method: "GET",
-      headers: new Headers(headers),
-      credentials: "include"
-    }).then((response) => response.json()).then(async ({ data, paging }) => {
+    fetch(
+      `https://www.zhihu.com/api/v3/settings/blocked_users?offset=${offset}&limit=${limit}`,
+      {
+        method: "GET",
+        headers: new Headers(headers),
+        credentials: "include"
+      }
+    ).then((response) => response.json()).then(async ({ data, paging }) => {
       const prevConfig = await myStorage.getConfig();
       const { blockedUsers = [], localBlockedUsers = [] } = prevConfig;
       const prevBlockedUsers = [...blockedUsers, ...localBlockedUsers];
       data.forEach(({ id, name, url_token }) => {
+        serverIds.add(id);
         const findItem = prevBlockedUsers.find((i) => i.id === id);
-        l.push({ id, name, urlToken: url_token, tags: findItem && findItem.tags || [] });
+        l.push({
+          id,
+          name,
+          urlToken: url_token,
+          tags: findItem && findItem.tags || []
+        });
       });
       if (!paging.is_end) {
-        onSyncBlackList(offset + limit, l);
+        onSyncBlackList(offset + limit, l, onComplete, serverIds);
         if (nodeList) {
           nodeList.innerHTML = `知乎黑名单加载中（${l.length} / ${paging.totals}）...`;
         }
@@ -599,12 +704,18 @@
         const syncedIds = new Set(l.map((item) => item.id));
         await myStorage.updateConfig({
           ...prevConfig,
-          blockedUsers: l,
-          localBlockedUsers: localBlockedUsers.filter((item) => !syncedIds.has(item.id))
+          blockedUsers: mergeBlockedUsers(l),
+          localBlockedUsers: localBlockedUsers.filter(
+            (item) => !syncedIds.has(item.id)
+          )
         });
         initHTMLBlockedUsers(document.body);
-        fnDomReplace(buttonSync, { innerHTML: "同步知乎黑名单", disabled: false });
+        fnDomReplace(buttonSync, {
+          innerHTML: "同步知乎黑名单",
+          disabled: false
+        });
         message("知乎黑名单同步完成");
+        if (onComplete) await onComplete(serverIds);
       }
     });
   }
@@ -741,7 +852,7 @@
       const versionSizeUserHome = formatVersionPercentSize("versionUserHome");
       const versionSizeCollection = formatVersionPercentSize("versionCollection");
       const NAME_HOME = ".Topstory-mainColumn,.SearchMain";
-      const NAME_ANSWER = ".QuestionPage,.QuestionHeader-footer-inner,.QuestionHeader .QuestionHeader-content,.QuestionPage>div";
+      const NAME_ANSWER = ".QuestionPage,.QuestionHeader-footer-inner,.QuestionHeader-content .QuestionHeader-content,.QuestionPage>div";
       const NAME_ARTICLE = ".Post-NormalSub>div,.zhuanlan .Post-Row-Content,.zhuanlan .css-pi1fiy";
       const NAME_USER_HOME = '#ProfileHeader,[itemprop="people"] .Profile-main';
       const NAME_COLLECTION = ".CollectionsDetailPage";
@@ -2066,6 +2177,8 @@
       const questionAnswerContent = dom(".QuestionAnswer-content");
       questionAnswerContent && doContentItem("QUESTION", questionAnswerContent.querySelector(".ContentItem"));
       processingData(domA(`.AnswersNavWrapper .List-item:not(.${CLASS_LISTENED})`));
+      processingData(domA(".ListShortcut .Card.AnswerCard"));
+      processingData(domA(".ListShortcut .Card.MoreAnswers .List-item"));
     },
     reset: function() {
       if (this.retryTimer) {
@@ -3652,7 +3765,7 @@
         {
           label: "顶部菜单栏 - AI Works",
           value: "hiddenHeaderSquare",
-          css: '.AppHeader a[href="https://www.zhihu.com/project/square"]{display:none}'
+          css: '.AppHeader a[href="https://www.zhihu.com/project-square"]{display:none}'
         },
         {
           label: "顶部菜单栏 - 故事",
@@ -3665,6 +3778,13 @@
           label: "回答和文章中的知学堂推广商品模块",
           value: "hiddenZhihuZhiShop",
           css: ".RichText-EduCardContainer{display:none;}"
+        }
+      ],
+      [
+        {
+          label: "左侧边栏",
+          value: "hiddenLeftSidebar",
+          css: "aside{display: none!important;}"
         }
       ]
     ]
@@ -3822,6 +3942,11 @@
           label: "付费咨询",
           value: "hiddenHomePayAsk",
           css: ".Topstory .css-1dyj6jm{display:none;}"
+        },
+        {
+          label: "右侧边栏",
+          value: "hiddenRightSidebar",
+          css: "div[data-za-detail-view-path-module='RightSideBar']{display: none!important;}"
         }
       ],
       [
@@ -3934,7 +4059,7 @@
         {
           label: "问题话题",
           value: "hiddenQuestionTag",
-          css: ".QuestionHeader-tags,.QuestionHeader .css-wmwsyx{display: none!important;}"
+          css: ".QuestionHeader-tags,.QuestionHeader-content .css-wmwsyx{display: none!important;}"
         },
         {
           label: "问题分享按钮",
@@ -3944,37 +4069,37 @@
         {
           label: '"好问题"按钮',
           value: "hiddenQuestionGoodQuestion",
-          css: ".QuestionPage .QuestionHeader .GoodQuestionAction{display: none}"
+          css: ".QuestionPage .QuestionHeader-content .GoodQuestionAction{display: none}"
         },
         {
           label: "问题添加评论按钮",
           value: "hiddenQuestionComment",
-          css: ".QuestionPage .QuestionHeader .QuestionHeader-Comment{display: none}"
+          css: ".QuestionPage .QuestionHeader-content .QuestionHeader-Comment{display: none}"
         },
         {
           label: '问题"..."按钮',
           value: "hiddenQuestionMore",
-          css: '.QuestionPage .QuestionHeader [aria-label="更多"]{display: none;}'
+          css: '.QuestionPage .QuestionHeader-content [aria-label="更多"]{display: none;}'
         },
         {
           label: "问题专题收录标签",
           value: "hiddenQuestionSpecial",
-          css: ".QuestionHeader .LabelContainer-wrapper{display: none;}"
+          css: ".QuestionHeader-content .LabelContainer-wrapper{display: none;}"
         },
         {
           label: "问题关注按钮",
           value: "hiddenQuestionFollowing",
-          css: ".QuestionHeader .FollowButton{display: none;}"
+          css: ".QuestionHeader-content .FollowButton{display: none;}"
         },
         {
           label: "问题写回答按钮",
           value: "hiddenQuestionAnswer",
-          css: ".QuestionHeader .FollowButton ~ button{display: none;}"
+          css: ".QuestionHeader-content .FollowButton ~ button{display: none;}"
         },
         {
           label: "问题邀请回答按钮",
           value: "hiddenQuestionInvite",
-          css: ".QuestionHeader .QuestionHeaderActions>button:first-child{display: none;}"
+          css: ".QuestionHeader-content .QuestionHeaderActions>button:first-child{display: none;}"
         },
         {
           label: "问题标题卡片广告和榜单",
@@ -4587,7 +4712,7 @@
         continue;
       }
       if (!item.getAttribute(ATTR_ID) || item.classList.contains(CTZ_HIDDEN_ITEM_CLASS)) continue;
-      const itemUserBox = item.querySelector(`${commentBoxClass} .css-14nvvry .css-swj9d4`);
+      const itemUserBox = item.querySelector(`${commentBoxClass} .css-1bklfe6 .css-swj9d4`);
       if (!itemUserBox) continue;
       const itemCommentUsers = itemUserBox.querySelectorAll(".css-1tww9qq");
       let isHidden = false;
@@ -5478,17 +5603,24 @@
         window.open(`https://www.zhihu.com/search?q=${value}`);
       }
     };
-    inputImportFile(dom(".ctz-input-config-import"), async (oFREvent) => {
-      let config = oFREvent.target ? oFREvent.target.result : "";
-      if (typeof config === "string") {
-        const nConfig = JSON.parse(config);
-        await myStorage.updateConfig(nConfig);
-        setTimeout(() => {
-          location.reload();
-        }, 300);
+    inputImportFile(
+      dom(".ctz-input-config-import"),
+      async (oFREvent) => {
+        let config = oFREvent.target ? oFREvent.target.result : "";
+        if (typeof config === "string") {
+          config = config.replace(/^\ufeff/, "").trim();
+          const nConfig = JSON.parse(config);
+          await myStorage.updateConfig(nConfig);
+          setTimeout(() => {
+            location.reload();
+          }, 300);
+        }
       }
-    });
-    inputImportFile(dom(".ctz-input-import-black"), onImportBlack);
+    );
+    inputImportFile(
+      dom(".ctz-input-import-black"),
+      onImportBlack
+    );
   };
   var myButtonOperation = {
     configExport: async () => {
@@ -5506,7 +5638,9 @@
       await myStorage.remove("pfConfig");
     },
     configReset: async function() {
-      const isUse = confirm("是否启恢复默认配置？\n该功能会覆盖当前配置，建议先将配置导出保存");
+      const isUse = confirm(
+        "是否启恢复默认配置？\n该功能会覆盖当前配置，建议先将配置导出保存"
+      );
       if (!isUse) return;
       await myStorage.updateConfig(CONFIG_DEFAULT);
       setTimeout(() => {
@@ -5532,7 +5666,9 @@
       dom(`button[name="dialogBig"]`).innerText = isHeight ? "⇵" : "-";
     },
     useSimple: async () => {
-      const isUse = confirm("是否启用极简模式？\n该功能会覆盖当前配置，建议先将配置导出保存");
+      const isUse = confirm(
+        "是否启用极简模式？\n该功能会覆盖当前配置，建议先将配置导出保存"
+      );
       if (!isUse) return;
       const prevConfig = await myStorage.getConfig(true);
       await myStorage.updateConfig({

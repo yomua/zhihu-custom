@@ -24,6 +24,10 @@ export interface IConfigHidden {
   hiddenFixedActions?: boolean;
   /** 隐藏logo */
   hiddenLogo?: boolean;
+  /** 隐藏左侧边栏 */
+  hiddenLeftSidebar?: boolean;
+  /** 隐藏右侧边栏 */
+  hiddenRightSidebar?: boolean;
   /** 隐藏header */
   hiddenHeader?: boolean;
   /** 付费咨询 */
